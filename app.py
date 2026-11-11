@@ -105,7 +105,7 @@ else:
             
             with col_seibi:
                 st.subheader("🔧 整備記録")
-                df_s = df_hf[df_hf["Category"].astype(str).str.strip() != "修理"]
+                df_s = df_hf[~df_hf["Category"].astype(str).str.strip().isin(["修理", "タイヤ購入"])]
                 if not df_s.empty:
                     st.dataframe(df_s[["History_ID", "Date", "Category", "Details", "Cost"]].sort_values(by="Date", ascending=False).rename(
                         columns={"History_ID": "管理ID", "Date": "実施日", "Category": "区分", "Details": "作業内容", "Cost": "費用(円)"}
@@ -124,6 +124,12 @@ else:
                 else: st.caption("修理記録はありません。")
             
             st.write("---")
+                df_t = df_hf[df_hf["Category"].astype(str).str.strip() == "タイヤ購入"]
+                tire_cost = df_t['Cost'].apply(safe_to_int).sum() if not df_t.empty else 0
+                st.info(f"🛞 タイヤ購入費 累計： **{tire_cost:,} 円**")
+                if not df_t.empty:
+                    with st.expander("🛞 タイヤ購入の内訳を見る"):
+                        st.dataframe(df_t[["History_ID", "Date", "Details", "Cost"]], use_container_width=True, hide_index=True)
             if not df_hf.empty:
                 total_cost = df_hf['Cost'].apply(safe_to_int).sum()
                 st.warning(f"💰 総メンテナンス費用 (整備 ＋ 修理)： **{total_cost:,} 円**")
@@ -139,7 +145,7 @@ else:
                             ec1, ec2 = st.columns(2)
                             try: edit_date = pd.to_datetime(t_row["Date"])
                             except: edit_date = date.today()
-                            cats = ["オイル交換", "定期点検", "車検", "修理", "その他"]
+                            cats = ["オイル交換", "定期点検", "車検", "修理","タイヤ購入", "その他"]
                             edit_cat = ec1.selectbox("修正区分", cats, index=cats.index(str(t_row["Category"]).strip()) if str(t_row["Category"]).strip() in cats else 0)
                             edit_cost = ec2.text_input("修正費用", value=str(t_row["Cost"]))
                             edit_det = ec2.text_area("修正詳細・作業内容", value=str(t_row["Details"]))
