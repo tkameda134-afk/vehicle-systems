@@ -8,7 +8,7 @@ st.set_page_config(layout="wide")
 st.markdown("<style>.block-container{padding-top:1.5rem!important;}[data-testid='stMetricValue']{font-size:22px!important;}[data-testid='stMetricLabel']{font-size:13px!important;margin-bottom:-5px!important;}.element-container{margin-bottom:0.4rem!important;}</style>", unsafe_allow_html=True)
 
 EXCEL_FILE = "vehicle_data.xlsx"
-st.title("🚗 車両管理システム")
+st.title("🚗 中里運送車両管理システム2026")
 ADMIN_PASSWORD = "1234"
 
 def safe_to_int(val):
