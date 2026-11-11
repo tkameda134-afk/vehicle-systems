@@ -124,12 +124,12 @@ else:
                 else: st.caption("修理記録はありません。")
             
             st.write("---")
-                df_t = df_hf[df_hf["Category"].astype(str).str.strip() == "タイヤ購入"]
-                tire_cost = df_t['Cost'].apply(safe_to_int).sum() if not df_t.empty else 0
-                st.info(f"🛞 タイヤ購入費 累計： **{tire_cost:,} 円**")
-                if not df_t.empty:
-                    with st.expander("🛞 タイヤ購入の内訳を見る"):
-                        st.dataframe(df_t[["History_ID", "Date", "Details", "Cost"]], use_container_width=True, hide_index=True)
+            df_t = df_hf[df_hf["Category"].astype(str).str.strip() == "タイヤ購入"]
+            tire_cost = df_t['Cost'].apply(safe_to_int).sum() if not df_t.empty else 0
+            st.info(f"🛞 タイヤ購入費 累計： **{tire_cost:,} 円**")
+            if not df_t.empty:
+                with st.expander("🛞 タイヤ購入の内訳を見る"):
+                    st.dataframe(df_t[["History_ID", "Date", "Details", "Cost"]], use_container_width=True, hide_index=True)
             if not df_hf.empty:
                 total_cost = df_hf['Cost'].apply(safe_to_int).sum()
                 st.warning(f"💰 総メンテナンス費用 (整備 ＋ 修理)： **{total_cost:,} 円**")
