@@ -1,3 +1,4 @@
+python
 import streamlit as st
 import pandas as pd
 import os
@@ -8,7 +9,7 @@ st.set_page_config(layout="wide")
 st.markdown("<style>.block-container{padding-top:1.5rem!important;}[data-testid='stMetricValue']{font-size:22px!important;}[data-testid='stMetricLabel']{font-size:13px!important;margin-bottom:-5px!important;}.element-container{margin-bottom:0.4rem!important;}</style>", unsafe_allow_html=True)
 
 EXCEL_FILE = "vehicle_data.xlsx"
-st.title("🚗 中里運送車両管理システム2026")
+st.title("🚗 車両管理システム")
 ADMIN_PASSWORD = "1234"
 
 def safe_to_int(val):
@@ -19,6 +20,13 @@ def save_to_excel(df_v, df_h):
     with pd.ExcelWriter(EXCEL_FILE, engine="openpyxl") as w:
         df_v.to_excel(w, sheet_name="Vehicle_Master", index=False)
         df_h.to_excel(w, sheet_name="Maintenance_History", index=False)
+
+def get_fiscal_year(d):
+    try:
+        dt = pd.to_datetime(d)
+        if pd.isna(dt): return ""
+        return f"{dt.year - 1 if dt.month < 4 else dt.year}年度"
+    except: return ""
 
 if not os.path.exists(EXCEL_FILE):
     st.error("Excelファイルが見つかりません。")
@@ -31,52 +39,41 @@ else:
         df_v["Vehicle_ID"] = df_v["Vehicle_ID"].astype(str).str.strip()
         df_h["Vehicle_ID"] = df_h["Vehicle_ID"].astype(str).str.strip()
 
-        # 🔴 左側をさらに狭めて（1 : 4.5 の比率）、右側の3列スペースを最大化
         col_left, col_right = st.columns([1, 4.5])
-        
         if "Office" not in df_v.columns: df_v["Office"] = "千葉営業所"
         if "Type" not in df_v.columns: df_v["Type"] = "トラック"
         if "Registration_Date" not in df_v.columns: df_v["Registration_Date"] = "2020-01-01"
 
-        # 👈 左側：スリム化した車両選択ナビ
         with col_left:
             st.subheader("🌲 車両選択")
             selected_office = st.selectbox("🏢 営業所", ["千葉営業所", "埼玉営業所"])
             type_opts = ["トラック", "トレーラー"] if selected_office == "千葉営業所" else ["トラック"]
             sel_type = st.radio("区分", type_opts, horizontal=True)
             st.write("---")
-            
             df_f = df_v[(df_v["Office"].astype(str).str.strip() == selected_office) & (df_v["Type"].astype(str).str.strip() == sel_type)]
             options_list = df_f["Car_Number"].dropna().tolist()
-            if not options_list:
-                st.warning("対象車両なし"); st.stop()
-                
+            if not options_list: st.warning("対象車両なし"); st.stop()
             sel_car = st.radio("🔢 車番一覧", options_list)
             v_rows = df_v[df_v["Car_Number"] == sel_car]
-            if v_rows.empty: v_rows = df_v[df_v["Car_Number"] == options_list[0]]
+            if v_rows.empty: v_rows = df_v[df_v["Car_Number"] == options_list]
             row_num = int(v_rows.index[0])
-            
             selected_vehicle_id = str(df_v.at[row_num, "Vehicle_ID"]).strip()
             car_name_val = str(df_v.at[row_num, "Car_Name"])
             next_insp_val = str(df_v.at[row_num, "Next_Inspection"])
             mileage_val = int(df_v.at[row_num, "Mileage"])
             reg_date_val = df_v.at[row_num, "Registration_Date"]
-
             try:
                 rd = pd.to_datetime(reg_date_val)
                 delta = relativedelta(date.today(), rd.date())
                 elp = f"{delta.years}年{delta.months}ヶ月"
                 r_dp = rd.strftime('%Y-%m')
             except: elp = "-"; r_dp = str(reg_date_val)
-
             st.write("---")
             pwd_input = st.text_input("🔒 編集パスワード", type="password")
             is_admin = (pwd_input == ADMIN_PASSWORD)
             if is_admin: st.success("🔓 編集可")
             elif pwd_input != "": st.error("パスワード違い")
-
-        # 👉 右側：車両詳細 ＋ 3列横並び履歴（整備・修理・タイヤ）
-        with col_right:
+with col_right:
             st.subheader("🔍 車両詳細情報")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("車名", car_name_val)
@@ -87,49 +84,46 @@ else:
             else:
                 c3.write("")
                 c4.metric("初度登録 (経過)", f"{r_dp} ({elp})")
-            
             st.write("---")
-            df_hf = df_h[df_h["Vehicle_ID"] == selected_vehicle_id]
-            cat_s = df_hf["Category"].astype(str).str.strip()
-            
-            # 🔴 右側エリアを「整備」「修理」「タイヤ購入」の3列に横並び分割
+            sel_fy = st.radio("📅 表示年度", ["2026年度", "2025年度", "全期間"], horizontal=True)
+            df_hf = df_h[df_h["Vehicle_ID"] == selected_vehicle_id].copy()
+            if not df_hf.empty and sel_fy != "全期間":
+                df_hf["FY"] = df_hf["Date"].apply(get_fiscal_year)
+                df_hf = df_hf[df_hf["FY"] == sel_fy]
+            cat_s = df_hf["Category"].astype(str).str.strip() if not df_hf.empty else pd.Series(dtype=str)
             col_s, col_r, col_t = st.columns(3)
             rename_dict = {"History_ID": "ID", "Date": "日付", "Category": "区分", "Details": "内容", "Cost": "費用"}
-            
             with col_s:
                 st.subheader("🔧 整備記録")
-                df_s = df_hf[~cat_s.isin(["修理", "タイヤ購入"])]
+                df_s = df_hf[~cat_s.isin(["修理", "タイヤ購入"])] if not df_hf.empty else pd.DataFrame()
                 if not df_s.empty:
-                    st.dataframe(df_s[["History_ID", "Date", "Category", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=240, hide_index=True)
-                    st.info(f"🔧 整備累計： **{df_s['Cost'].apply(safe_to_int).sum():,} 円**")
+                    st.dataframe(df_s[["History_ID", "Date", "Category", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=230, hide_index=True)
+                    st.info(f"🔧 整備累計 ({sel_fy})： **{df_s['Cost'].apply(safe_to_int).sum():,} 円**")
                 else: st.caption("記録なし")
-            
             with col_r:
                 st.subheader("🔨 修理記録")
-                df_r = df_hf[cat_s == "修理"]
+                df_r = df_hf[cat_s == "修理"] if not df_hf.empty else pd.DataFrame()
                 if not df_r.empty:
-                    st.dataframe(df_r[["History_ID", "Date", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=240, hide_index=True)
-                    st.success(f"🔨 修理累計： **{df_r['Cost'].apply(safe_to_int).sum():,} 円**")
+                    st.dataframe(df_r[["History_ID", "Date", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=230, hide_index=True)
+                    st.success(f"🔨 修理累計 ({sel_fy})： **{df_r['Cost'].apply(safe_to_int).sum():,} 円**")
                 else: st.caption("記録なし")
-
             with col_t:
                 st.subheader("🛞 タイヤ購入記録")
-                df_t = df_hf[cat_s == "タイヤ購入"]
+                df_t = df_hf[cat_s == "タイヤ購入"] if not df_hf.empty else pd.DataFrame()
                 if not df_t.empty:
-                    st.dataframe(df_t[["History_ID", "Date", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=240, hide_index=True)
-                    st.info(f"🛞 タイヤ累計： **{df_t['Cost'].apply(safe_to_int).sum():,} 円**")
+                    st.dataframe(df_t[["History_ID", "Date", "Details", "Cost"]].sort_values("Date", ascending=False).rename(columns=rename_dict), use_container_width=True, height=230, hide_index=True)
+                    st.info(f"🛞 タイヤ累計 ({sel_fy})： **{df_t['Cost'].apply(safe_to_int).sum():,} 円**")
                 else: st.caption("記録なし")
-            
             st.write("---")
             total_cost = df_hf['Cost'].apply(safe_to_int).sum() if not df_hf.empty else 0
-            st.warning(f"💰 総メンテナンス費用 (整備 ＋ 修理 ＋ タイヤ)： **{total_cost:,} 円**")
-            
+            st.warning(f"💰 総メンテナンス費用【{sel_fy}】 (整備 ＋ 修理 ＋ タイヤ)： **{total_cost:,} 円**")
             if is_admin:
                 st.write("---")
                 cats = ["オイル交換", "定期点検", "車検", "修理", "タイヤ購入", "その他"]
+                df_h_all = df_h[df_h["Vehicle_ID"] == selected_vehicle_id]
                 with st.expander("🔄 過去の記録を修正・削除する"):
-                    if not df_hf.empty:
-                        target_id = safe_to_int(st.selectbox("修正ID：", df_hf["History_ID"].tolist()))
+                    if not df_h_all.empty:
+                        target_id = safe_to_int(st.selectbox("修正ID：", df_h_all["History_ID"].tolist()))
                         t_rows = df_h[df_h["History_ID"].apply(safe_to_int) == target_id]
                         if not t_rows.empty:
                             t_row = t_rows.iloc[0]
@@ -147,7 +141,6 @@ else:
                             if b2.button("🗑️ 削除する"):
                                 df_h = df_h[df_h["History_ID"].apply(safe_to_int) != target_id]
                                 save_to_excel(df_v, df_h); st.warning("削除完了"); st.rerun()
-
                 with st.expander("➕ 新しい記録を追加する"):
                     with st.form("add_form", clear_on_submit=True):
                         fc1, fc2 = st.columns(2)
@@ -162,7 +155,6 @@ else:
                             df_h = pd.concat([df_h, pd.DataFrame([new_row])], ignore_index=True)
                             if sel_type == "トラック": df_v.at[row_num, "Mileage"] = safe_to_int(i_mile)
                             save_to_excel(df_v, df_h); st.success("保存完了"); st.rerun()
-                            
                 with open(EXCEL_FILE, "rb") as f:
                     st.download_button("📥 最新Excelをダウンロード", f, file_name=f"vehicle_data_{date.today().strftime('%Y%m%d')}.xlsx", use_container_width=True)
     except Exception as e:
