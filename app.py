@@ -73,7 +73,7 @@ else:
             is_admin = (pwd_input == ADMIN_PASSWORD)
             if is_admin: st.success("🔓 編集可")
             elif pwd_input != "": st.error("パスワード違い")
-with col_right:
+        with col_right:
             st.subheader("🔍 車両詳細情報")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("車名", car_name_val)
